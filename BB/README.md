@@ -12,3 +12,8 @@ Dieses Verzeichnis enthält zentrale Planungs- und Governance-Dokumente für das
 - DRY: Keine doppelte Logik über Reader-, Sync- und API-Schicht.
 - YAGNI: Erweiterungen (z. B. Neo4j) erst bei messbarer Notwendigkeit.
 - Ein gemeinsamer Ingestion-Service ist die einzige Schreibschnittstelle für API und MCP.
+
+## Entscheidungsstand (v1)
+- Provider-Strategie: Primary + Fallback.
+- Aktive KB: pro API-Key/Client.
+- Delivery-Qualität: Minimal-CI sofort, Performance-Benchmarks als Stage-Gate in M8.
