@@ -1,7 +1,7 @@
 # Milestones-Dokument – LLM Knowledge Base System (MCP + FastAPI)
 
 **Ableitung aus PRD v1.0 vom 2026-04-06**  
-**Zielbild:** Skalierbares, auditierbares, deterministisches LLM-Knowledge-Base-System auf Markdown-Basis mit Delta-Sync, GC-Workflow, MCP-Server und FastAPI.
+**Zielbild:** Skalierbares, auditierbares, deterministisches LLM-Knowledge-Base-System auf Markdown-Basis mit Delta-Sync, Ingestion-Pipeline, GC-Workflow, MCP-Server und FastAPI.
 
 ---
 
@@ -32,7 +32,43 @@
 
 ---
 
-## 2) Milestone-Plan (M0–M8)
+## 2) Gap-Analyse zu den Review-Fragen
+
+### Frage 1 – Wissen über MCP hinzufügen
+- **Vorher:** Nur lesende und Sync-nahe MCP-Tools dokumentiert (`kb.query`, `kb.sync`, `kb.gc_report`, `kb.file_get`).
+- **Jetzt vorgesehen:** Schreibfähige MCP-Tools werden ergänzt:
+  - `kb.ingest_text`: nimmt Text/Markdown entgegen, erzeugt KB-Datei und triggert optional Delta-Sync.
+  - `kb.ingest_file`: importiert bestehende Markdown-Datei in eine ausgewählte KB.
+  - `kb.ingest_status`: liefert Status eines Ingestion-Jobs.
+- **Governance:** Jeder Schreibvorgang schreibt Audit-Metadaten (Quelle, Autor/System, Zeit, Ziel-KB, Run-ID).
+
+### Frage 2 – Ingestion Pipeline
+- **Vorher:** Nur Delta-Sync war klar beschrieben.
+- **Jetzt vorgesehen:** Dedizierte Pipeline mit Schritten:
+  1. Input validieren,
+  2. Ziel-KB dynamisch auflösen,
+  3. Inhalt normalisieren (Frontmatter, Encoding, Pfadregeln),
+  4. Persistieren,
+  5. Delta-Sync/Extraction anstoßen,
+  6. GC-Regeln für neue/aktualisierte Inhalte ausführen.
+
+### Frage 3 – Dynamische Einstellungen
+- **Vorher:** Konfiguration nur generisch erwähnt.
+- **Jetzt vorgesehen:** Runtime-konfigurierbare Settings-API:
+  - LLM-Provider wechseln,
+  - Modelle des aktiven Providers live abfragen,
+  - aktive Knowledge Base wechseln (mehrere KBs pro Host),
+  - pro KB getrennte Reader-/Sync-Limits.
+
+### Frage 4 – Start, Stop, Restart
+- **Vorher:** Betrieb nur indirekt über Rollout/Runbook adressiert.
+- **Jetzt vorgesehen:** Lebenszyklussteuerung auf Service-Ebene:
+  - `start`, `stop`, `restart` für Ingestion-Worker und Sync-Scheduler,
+  - Health-/State-Endpunkte für Betriebszustand.
+
+---
+
+## 3) Milestone-Plan (M0–M10)
 
 ## M0 – Foundation & Repo-Baseline
 
@@ -168,13 +204,41 @@ GC ist Governance, nicht nur Datenhygiene. Dokumentierte Konflikte erhalten Wiss
 
 ---
 
-## M5 – FastAPI Service Layer
+## M5 – Ingestion Pipeline (neu)
+
+### Ziel
+Kontrolliertes Hinzufügen von Wissen mit Audit-Trail und deterministischer Nachverarbeitung.
+
+### Scope
+- Ingestion-Services für Text und Dateiimporte.
+- Normalisierungsschritte (Dateiname, Pfad, Metadaten, UTF-8).
+- Job-Queue für asynchrone Verarbeitung.
+- Trigger für Delta-Sync und GC nach erfolgreichem Persistieren.
+
+### Deliverables
+- `ingestion/service.py` und `ingestion/worker.py`.
+- `ingestion_jobs`-Tabelle (Status, Fehlercode, Laufzeiten).
+
+### Analyse
+Eine explizite Pipeline trennt Input-Validierung, Persistenz und Nachverarbeitung sauber. Das hält die Architektur einfach und verhindert Logikduplikate zwischen API und MCP.
+
+### Exit-Kriterien
+- Ingestion kann neue Inhalte zuverlässig in eine gewählte KB schreiben.
+- Jeder Job ist vollständig auditierbar.
+
+---
+
+## M6 – FastAPI Service Layer
 
 ### Ziel
 HTTP-fähige, integrierbare Schnittstelle auf Basis derselben Kernlogik wie CLI/Reader schaffen.
 
 ### Scope
 - Endpunkte: `/health`, `/query`, `/sync/run`, `/sync/runs/{run_id}`, `/gc/evaluate`, `/gc/report`.
+- Ingestion-Endpunkte: `/ingest/text`, `/ingest/file`, `/ingest/jobs/{job_id}`.
+- Settings-Endpunkte: `/settings/providers`, `/settings/providers/{provider}/models`, `/settings/active`.
+- KB-Auswahl-Endpunkte: `/kb/list`, `/kb/active`, `/kb/active/{kb_id}`.
+- Lifecycle-Endpunkte: `/services/{service_name}/start|stop|restart`, `/services/status`.
 - Pydantic-Modelle für Input/Output.
 - Gemeinsame Service-Schicht für Reader/Sync/GC (DRY).
 
@@ -196,13 +260,17 @@ FastAPI ermöglicht standardisierte Integration in interne Systeme (UIs, Schedul
 
 ---
 
-## M6 – MCP Server Integration
+## M7 – MCP Server Integration
 
 ### Ziel
 LLM-native Tooling bereitstellen, damit Agenten deterministisch und auditierbar auf die KB zugreifen.
 
 ### Scope
 - MCP Tools: `kb.query`, `kb.sync`, `kb.gc_report`, `kb.file_get`.
+- Schreibende MCP Tools: `kb.ingest_text`, `kb.ingest_file`, `kb.ingest_status`.
+- Dynamische Settings Tools: `kb.settings_get`, `kb.settings_update`, `kb.provider_models`.
+- KB-Switch Tool: `kb.kb_select`.
+- Lifecycle Tools: `kb.service_start`, `kb.service_stop`, `kb.service_restart`, `kb.service_status`.
 - Tool-Verträge inklusive Fehlercodes und Grenzwerten.
 - Optional: MCP auf dieselbe interne Service-Schicht wie FastAPI aufsetzen.
 
@@ -219,7 +287,7 @@ MCP reduziert Integrationsaufwand mit LLM-Clients und erzwingt klare Funktionsgr
 
 ---
 
-## M7 – Performance, Skalierung & Zuverlässigkeit
+## M8 – Performance, Skalierung & Zuverlässigkeit
 
 ### Ziel
 Nicht-funktionale Ziele verifizieren und Engpässe eliminieren.
@@ -242,7 +310,7 @@ Skalierbarkeit entsteht nicht nur durch Technologie, sondern durch Messbarkeit. 
 
 ---
 
-## M8 – Abnahme, Betriebsmodell & Rollout
+## M9 – Abnahme, Betriebsmodell & Rollout
 
 ### Ziel
 Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
@@ -262,7 +330,31 @@ Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
 
 ---
 
-## 3) Cross-Milestone Deliverables (durchgängig)
+## M10 – Dynamische Konfiguration & Multi-KB-Governance (neu)
+
+### Ziel
+Laufzeitkonfiguration ohne Redeploy, inklusive Provider-/Modellwechsel und Multi-KB-Betrieb.
+
+### Scope
+- Zentrale Settings-Verwaltung (persistiert in DB, gecacht im Prozess).
+- Live-Abfrage verfügbarer Modelle pro Provider.
+- Verwaltung mehrerer KB-Pfade auf einer Maschine mit klarer Trennung.
+- Sicherheitsregeln für erlaubte KB-Root-Pfade.
+
+### Deliverables
+- `settings/service.py` + `settings_repository.py`.
+- Tabellen: `providers`, `provider_models_cache`, `kb_registry`, `runtime_settings`.
+
+### Analyse
+Dynamische Settings reduzieren Betriebsaufwand deutlich. Multi-KB-Unterstützung ist Voraussetzung für isolierte Wissensdomänen ohne komplexes Multi-Tenant-Modell.
+
+### Exit-Kriterien
+- Provider, Modell und aktive KB sind zur Laufzeit umstellbar.
+- Modellliste eines Providers kann live aktualisiert und angezeigt werden.
+
+---
+
+## 4) Cross-Milestone Deliverables (durchgängig)
 
 - **Testpyramide:** Unit (Parser/Regeln), Integration (DB + Sync), E2E (Reader/API/MCP).
 - **Observability:** strukturierte Logs, Metriken (Latenz, Fehlerrate, Sync-Dauer), Tracing optional.
@@ -271,7 +363,7 @@ Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
 
 ---
 
-## 4) KPI-Framework und Messmethodik
+## 5) KPI-Framework und Messmethodik
 
 ### Primäre KPIs
 1. **Relevanzpräzision:** >90% relevante Kontextdateien.
@@ -284,6 +376,8 @@ Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
 - Anteil inkrementeller vs. vollständiger Extraktionen.
 - Anzahl `needs_review` pro Woche.
 - DB-Wachstum pro 1.000 neue Markdown-Dateien.
+- Ingestion-Durchsatz (Jobs/min) und Fehlerrate.
+- Zeit für Provider-Modelllisten-Refresh.
 
 ### Messdesign
 - Feste Benchmark-Korpora (Small/Medium/Large).
@@ -292,7 +386,7 @@ Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
 
 ---
 
-## 5) Risikoanalyse mit Triggern
+## 6) Risikoanalyse mit Triggern
 
 | Risiko | Trigger | Frühindikator | Maßnahme |
 |---|---|---|---|
@@ -301,19 +395,21 @@ Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
 | GC-Fehlklassifikation | Ambigue Aussagen in Quellen | Steigende `needs_review`-Quote | Reviewer-Workflow + Regelverfeinerung |
 | SQLite-Lock-Contention | Viele parallele Schreiboperationen | Zeitouts/Lock-Fehler im Sync | Serialisierte Writes, Queue, WAL-Tuning |
 | Overengineering | Frühe Neo4j-Einführung ohne Nachweis | Höhere Komplexität ohne KPI-Gewinn | Stage-Gate: Neo4j nur bei messbarem Bottleneck |
+| Falscher Providerwechsel | Unpassendes Modell zur Laufzeit aktiv | Mehr Fehler bei Query/Completion | Validierungsregeln + Canary-Switch pro KB |
+| KB-Verwechslung | Schreiben in falsche Knowledge Base | Ungewöhnliche Pfad-/Namespace-Muster | Explizite aktive-KB-Anzeige + Confirm-Policy für Schreibzugriffe |
 
 ---
 
-## 6) Stage-Gates (Go/No-Go)
+## 7) Stage-Gates (Go/No-Go)
 
 - **Gate A (nach M3):** Reader + Delta-Sync stabil? Wenn nein: keine API/MCP-Exponierung.
-- **Gate B (nach M5/M6):** API/MCP liefern identische Ergebnisse? Wenn nein: Contract-Harmonisierung vor M7.
-- **Gate C (nach M7):** KPI-Ziele erreicht? Wenn nein: gezieltes Tuning vor Rollout.
-- **Gate D (M8):** Abnahme vollständig? Wenn nein: kein Production-Go-Live.
+- **Gate B (nach M6/M7):** API/MCP liefern identische Ergebnisse? Wenn nein: Contract-Harmonisierung vor M8.
+- **Gate C (nach M8):** KPI-Ziele erreicht? Wenn nein: gezieltes Tuning vor Rollout.
+- **Gate D (M9/M10):** Abnahme und dynamische Settings vollständig? Wenn nein: kein Production-Go-Live.
 
 ---
 
-## 7) Team- und Betriebsmodell (Rollen)
+## 8) Team- und Betriebsmodell (Rollen)
 
 - **KB Curator:** pflegt Markdown-Quellen und Kanon-Entscheidungen.
 - **Platform Engineer:** verantwortet Sync, DB, Deployment, Observability.
@@ -323,7 +419,7 @@ Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
 
 ---
 
-## 8) Vorschlag für Zeitplanung (indikativ)
+## 9) Vorschlag für Zeitplanung (indikativ)
 
 - M0: 0,5 Woche
 - M1: 1 Woche
@@ -331,20 +427,24 @@ Produktionsreife inkl. Governance, Betriebshandbuch und klarer Rollout-Routine.
 - M3: 1 Woche
 - M4: 1 Woche
 - M5: 1 Woche
-- M6: 0,5–1 Woche
+- M6: 1 Woche
 - M7: 1 Woche
-- M8: 0,5 Woche
+- M8: 1 Woche
+- M9: 0,5 Woche
+- M10: 0,5 Woche
 
-**Gesamt:** ca. 7–8 Wochen bis produktionsnahe Erstversion (teamabhängig).
+**Gesamt:** ca. 8,5–9 Wochen bis produktionsnahe Erstversion (teamabhängig).
 
 ---
 
-## 9) Definition of Done (gesamt)
+## 10) Definition of Done (gesamt)
 
 Das System gilt als umgesetzt, wenn:
 1. FR-1 bis FR-5 erfüllt und getestet sind,
 2. FastAPI- und MCP-Schnittstellen produktiv nutzbar sind,
-3. KPI-Ziele erreicht oder mit nachvollziehbarer Abweichung dokumentiert sind,
-4. GC-Report alle Fälle strukturiert, nachvollziehbar und revisionssicher dokumentiert,
-5. Betriebs- und Rollout-Dokumentation vollständig vorliegt.
-
+3. Wissen über MCP und FastAPI ingestierbar ist (inklusive Audit-Trail),
+4. Provider/Modell/aktive KB zur Laufzeit dynamisch konfigurierbar sind,
+5. Start/Stop/Restart für relevante Dienste vorhanden und getestet sind,
+6. KPI-Ziele erreicht oder mit nachvollziehbarer Abweichung dokumentiert sind,
+7. GC-Report alle Fälle strukturiert, nachvollziehbar und revisionssicher dokumentiert,
+8. Betriebs- und Rollout-Dokumentation vollständig vorliegt.
