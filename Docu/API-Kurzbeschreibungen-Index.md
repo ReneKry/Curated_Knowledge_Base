@@ -24,10 +24,13 @@ Dieses Dokument indexiert die geplanten API-Oberflächen für das LLM-Knowledge-
 - `POST /services/{service_name}/restart`: Startet einen verwalteten Hintergrunddienst neu.
 - `GET /services/status`: Liefert den Laufstatus aller verwalteten Dienste.
 
+**Hinweis zur KB-Zuordnung:** Die aktive KB wird im Client-Kontext geführt (pro API-Key/Client), nicht als globaler Systemzustand.
+
 ## MCP Server (Tool Interface)
 - `kb.query`: Deterministische Query mit Prioritätspfaden und Limits.
 - `kb.sync`: Delta-Sync für geänderte Markdown-Dateien.
 - `kb.gc_report`: Zugriff auf strukturierte GC-Einträge.
+- `kb.gc_evaluate`: Führt GC-Regeln auf ausgewählten oder allen KB-Markdown-Dateien aus.
 - `kb.file_get`: Volltextzugriff auf selektierte KB-Dateien.
 - `kb.ingest_text`: Fügt Wissen als Text/Markdown hinzu.
 - `kb.ingest_file`: Fügt Wissen aus einer Datei hinzu.
@@ -39,7 +42,11 @@ Dieses Dokument indexiert die geplanten API-Oberflächen für das LLM-Knowledge-
 - `kb.service_start|kb.service_stop|kb.service_restart`: Steuerung der Lifecycle-Aktionen.
 - `kb.service_status`: Gibt den Laufzustand verwalteter Dienste zurück.
 
+**Hinweis zur KB-Zuordnung:** `kb.kb_select` wirkt im Kontext des aufrufenden Clients/API-Keys.
+
 ## Hinweise
 - Implementierung bleibt SQLite-first.
 - MCP und FastAPI greifen auf dieselbe Service-Schicht zu (DRY).
 - Schreibzugriffe laufen über eine einheitliche Ingestion-Pipeline (KISS).
+- API/MCP und externe Batch-Ingestion sind nur unterschiedliche Eingänge auf dieselbe Ingestion-Logik.
+- Startniveau v1: internes Netz ohne Auth; Auth ist als Ausbaustufe einzuplanen.

@@ -68,6 +68,29 @@
 
 ---
 
+## 2.1) Verbindlicher Entscheidungsstand v1 (festgelegt)
+
+Die folgenden Entscheidungen sind für v1 angenommen und damit Umsetzungsgrundlage:
+
+1. **Provider-Strategie:** `Primary + Fallback`.
+2. **Ingestion-Ausführung:** Ingestion-Worker **und** Sync-Scheduler werden als verwaltete Dienste betrieben.
+3. **Aktive KB-Zuordnung:** aktive Knowledge Base pro API-Key/Client.
+4. **Auth-Startniveau:** initial kein Auth im internen Netz; Auth wird als Ausbaustufe vorbereitet.
+5. **Limits:** konservative Defaults mit pro-KB-Override.
+6. **Qualitätssicherung:** Minimal-CI ab sofort; Performance-Benchmarks bleiben Stage-Gate in M8.
+
+### Architekturhinweis zur Ingestion-Frage
+Die duale Anforderung bleibt erhalten: Wissen kann über HTTP/MCP **und** über eine separate Ingestion-Pipeline hinzugefügt werden.
+
+- **Wichtiger DRY-Grundsatz:** Beide Wege laufen in dieselbe Ingestion-Service-Schicht.
+- API/MCP sind dabei nur Eingangsadapter.
+- Die separate Pipeline (z. B. Batch/Dateiimport) ist ein zusätzlicher Eingangsadapter.
+- Persistenz, Normalisierung, Delta-Sync-Trigger und GC-Prüfung bleiben zentral und identisch.
+
+Damit entstehen keine widersprüchlichen Schreibpfade und kein doppelter Implementierungsaufwand.
+
+---
+
 ## 3) Milestone-Plan (M0–M10)
 
 ## M0 – Foundation & Repo-Baseline
@@ -239,6 +262,7 @@ HTTP-fähige, integrierbare Schnittstelle auf Basis derselben Kernlogik wie CLI/
 - Settings-Endpunkte: `/settings/providers`, `/settings/providers/{provider}/models`, `/settings/active`.
 - KB-Auswahl-Endpunkte: `/kb/list`, `/kb/active`, `/kb/active/{kb_id}`.
 - Lifecycle-Endpunkte: `/services/{service_name}/start|stop|restart`, `/services/status`.
+- Aktive KB ist clientbezogen (API-Key/Client-Kontext), nicht global.
 - Pydantic-Modelle für Input/Output.
 - Gemeinsame Service-Schicht für Reader/Sync/GC (DRY).
 
@@ -271,6 +295,7 @@ LLM-native Tooling bereitstellen, damit Agenten deterministisch und auditierbar 
 - Dynamische Settings Tools: `kb.settings_get`, `kb.settings_update`, `kb.provider_models`.
 - KB-Switch Tool: `kb.kb_select`.
 - Lifecycle Tools: `kb.service_start`, `kb.service_stop`, `kb.service_restart`, `kb.service_status`.
+- `kb.kb_select` wirkt im Client-Kontext (pro API-Key/Client), nicht systemglobal.
 - Tool-Verträge inklusive Fehlercodes und Grenzwerten.
 - Optional: MCP auf dieselbe interne Service-Schicht wie FastAPI aufsetzen.
 
